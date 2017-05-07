@@ -1,0 +1,151 @@
+#! /bin/sh
+
+### BEGIN INIT INFO
+# Provides:          nginx
+# Required-Start:    $remote_fs $network
+# Required-Stop:     $remote_fs $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: starts nginx
+# Description:       starts the Nginx Process Manager daemon
+### END INIT INFO
+
+prefix={{ nginx_path }}
+exec_prefix=${prefix}
+
+nginx_BIN=${exec_prefix}/sbin/nginx
+nginx_CONF=${prefix}/conf/nginx.conf
+nginx_PID=${prefix}/nginx.pid
+
+
+
+
+wait_for_pid () {
+	try=0
+
+	while test $try -lt 35 ; do
+
+		case "$1" in
+			'created')
+			if [ -f "$2" ] ; then
+				try=''
+				break
+			fi
+			;;
+
+			'removed')
+			if [ ! -f "$2" ] ; then
+				try=''
+				break
+			fi
+			;;
+		esac
+
+		echo -n .
+		try=`expr $try + 1`
+		sleep 1
+
+	done
+
+}
+
+case "$1" in
+	start)
+		echo -n "Starting nginx "
+
+		$nginx_BIN -c $nginx_CONF
+
+		if [ "$?" != 0 ] ; then
+			echo " failed"
+			exit 1
+		fi
+
+		wait_for_pid created $nginx_PID
+
+		if [ -n "$try" ] ; then
+			echo " failed"
+			exit 1
+		else
+			echo " done"
+		fi
+	;;
+
+	stop)
+		echo -n "Gracefully shutting down nginx "
+
+		if [ ! -r $nginx_PID ] ; then
+			echo "warning, no pid file found - nginx is not running ?"
+			exit 1
+		fi
+
+		$nginx_BIN -s stop
+               
+		wait_for_pid removed $nginx_PID
+
+		if [ -n "$try" ] ; then
+			echo " failed. Use force-quit"
+			exit 1
+		else
+			echo " done"
+		fi
+	;;
+
+	status)
+		if [ ! -r $nginx_PID ] ; then
+			echo "nginx is stopped"
+			exit 0
+		fi
+
+		PID=`cat $nginx_PID`
+		if ps -p $PID | grep -q $PID; then
+			echo "nginx (pid $PID) is running..."
+		else
+			echo "nginx dead but pid file exists"
+		fi
+	;;
+
+	force-quit)
+		echo -n "Terminating nginx "
+
+		if [ ! -r $nginx_PID ] ; then
+			echo "warning, no pid file found - nginx is not running ?"
+			exit 1
+		fi
+
+		kill -TERM `cat $nginx_PID`
+
+		wait_for_pid removed $nginx_PID
+
+		if [ -n "$try" ] ; then
+			echo " failed"
+			exit 1
+		else
+			echo " done"
+		fi
+	;;
+
+	restart)
+		$0 stop
+		$0 start
+	;;
+
+	reload)
+
+		echo -n "Reload service nginx "
+
+		if [ ! -r $nginx_PID ] ; then
+			echo "warning, no pid file found - nginx is not running ?"
+			exit 1
+		fi
+
+		$nginx_BIN -s reload		
+
+		echo " done"
+	;;
+
+	*)
+		echo "Usage: $0 {start|stop|force-quit|restart|reload|status}"
+		exit 1
+	;;
+
+esac
