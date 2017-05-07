@@ -1,0 +1,47 @@
+---
+- hosts: "{{host}}"
+  user: "root"
+  gather_facts: no
+  tasks:
+   - name: Yum install mysql depend package
+     yum: name={{ item }} state=present
+     with_items:
+       - gcc
+       - gcc-c++
+       - zlib 
+       - zlib-devel 
+       - ncurses 
+       - ncurses-devel 
+       - openssl 
+       - openssl-devel 
+       - cmake
+       - make
+
+   - name: create user {{ mysql_user }}
+     user: name={{ mysql_user }}  shell=/sbin/nologin
+
+   - name: copy source package to {{ host }}
+     copy: src={{ ansible_mysql_package }}/{{ item.name }} dest=/usr/local/src/{{ item.name }} mode=755
+     with_items:
+       - { name: 'mysql-5.6.35.tar.gz' }
+
+   - name: mkdir mysql config dir
+     file: dest={{ mysql_path }}/etc/ owner={{ mysql_user }} group={{ mysql_user }}  state=directory
+
+   - name: install mysql-5.6.35
+     shell: cd /usr/local/src/ && rm -rf mysql-5.6.35  && tar -xzf mysql-5.6.35.tar.gz  && cd mysql-5.6.35  && cmake -DCMAKE_INSTALL_PREFIX={{ mysql_path }} -DMYSQL_UNIX_ADDR={{ mysql_path }}/mysql.sock -DDEFAULT_CHARSET=utf8 -DDEFAULT_COLLATION=utf8_general_ci -DWITH_MYISAM_STORAGE_ENGINE=1 -DWITH_INNOBASE_STORAGE_ENGINE=1 -DWITH_MEMORY_STORAGE_ENGINE=1 -DWITH_READLINE=1 -DENABLED_LOCAL_INFILE=1 -DMYSQL_DATADIR={{ mysql_path }}/data -DMYSQL_USER={{ mysql_user }} -DMYSQL_TCP_PORT={{ port }} -DSYSCONFDIR={{ mysql_path }}/etc && make && make install && cp support-files/mysql.server /etc/init.d/mysql && chmod 755 /etc/init.d/mysql
+
+   - name: chown mysql dir
+     file: dest={{ mysql_path }} owner={{ mysql_user }} group={{ mysql_user }}
+
+   - name: copy mysql config file
+     template: src={{ansible_mysql_config}}/{{ item.name }} dest={{ mysql_path }}/etc/{{ item.name }}
+     with_items:
+       - { name: 'my.cnf' }
+       
+   - name: init mysql
+     shell: cd {{ mysql_path }} && ./scripts/mysql_install_db  --basedir={{ mysql_path }} --datadir={{ mysql_path }}/data/ --skip-name-resolve --user={{ mysql_user }} --defaults-file={{ mysql_path }}/etc/my.cnf
+
+   - name: Encure MySQL is running
+     service: name=mysql state=started enabled=yes  
+

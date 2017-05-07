@@ -1,0 +1,66 @@
+---
+- hosts: "{{host}}"
+  user: "root"
+  gather_facts: yes
+  tasks:
+   - name: Yum install nginx depend package
+     yum: name={{ item }} state=present
+     with_items:
+       - pcre
+       - pcre-devel
+       - gcc
+       - gcc-c++
+       - autoconf
+       - libjpeg
+       - libjpeg-devel
+       - libpng 
+       - libpng-devel 
+       - freetype 
+       - freetype-devel 
+       - libxml2 
+       - libxml2-devel 
+       - zlib 
+       - zlib-devel 
+       - glibc 
+       - glibc-devel 
+       - glib2 
+       - glib2-devel 
+       - bzip2 
+       - bzip2-devel 
+       - ncurses 
+       - ncurses-devel 
+       - curl 
+       - curl-devel 
+       - libidn 
+       - libidn-devel 
+       - openssl 
+       - openssl-devel 
+       - make
+
+   - name: create user {{ nginx_user }}
+     user: name={{ nginx_user }}  shell=/sbin/nologin
+
+   - name: copy source package to {{ host }}
+     copy: src={{ ansible_nginx_package }}/{{ item.name }} dest=/usr/local/src/{{ item.name }} mode=755
+     with_items:
+       - { name: 'nginx-1.11.13.tar.gz' }
+
+   - name: install nginx-1.11.13
+     shell: cd /usr/local/src/ && tar -xzf nginx-1.11.13.tar.gz && cd nginx-1.11.13  && ./configure --user={{ nginx_user }} --group={{ nginx_user }} --prefix={{ nginx_path }} --with-http_stub_status_module  --with-http_ssl_module && make && make install
+
+
+   - name: copy nginx config file
+     template: src={{ansible_nginx_config}}/{{ item.name }} dest={{nginx_path}}/conf/{{ item.name }}
+     with_items:
+       - { name: 'nginx.conf' }
+       - { name: 'fcgi.conf' }
+        
+   - name: mkdir vhost dir
+     file: dest={{ nginx_path }}/vhost/ owner=root group=root mode=700 state=directory
+
+   - name: make nginx start scripts
+     template: src={{ansible_nginx_config}}/nginx dest=/etc/init.d/nginx mode=755
+
+   - name: Encure nginx is running
+     service: name=nginx state=started enabled=yes  
+

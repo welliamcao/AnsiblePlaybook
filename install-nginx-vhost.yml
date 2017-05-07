@@ -1,0 +1,10 @@
+---
+- hosts: "{{host}}"
+  user: "root"
+  gather_facts: no
+  tasks:
+   - name: copy nginx vhost config file
+     template: src={{ansible_nginx_config}}/vhost.conf dest={{nginx_path}}/vhost/{{ domain }}.conf
+        
+   - name:  reload nginx
+     service: name=nginx state=reloaded
